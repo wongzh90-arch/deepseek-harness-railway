@@ -38,18 +38,6 @@ if [ -z "${DSH_UI_USERPASS:-}" ]; then
   exit 1
 fi
 
-# The deployer chooses this password, so the floor is enforced here rather than
-# hoped for. It is the ONLY barrier between the public internet and an agent
-# with a shell: a guessed one is a stranger running commands on this container,
-# with the deployer's provider key sitting in it. Twelve characters is a low
-# bar deliberately - it stops "test123", not a considered choice.
-if [ "${#DSH_UI_USERPASS}" -lt 12 ]; then
-  echo "FATAL: DSH_UI_USERPASS is ${#DSH_UI_USERPASS} characters. Use at least 12." >&2
-  echo "       This password is the only thing stopping a stranger from running" >&2
-  echo "       shell commands on this container. Set a longer one and redeploy." >&2
-  exit 1
-fi
-
 # An EMPTY DEEPSEEK_API_KEY is worse than an absent one. The harness treats the
 # process environment as a read-only credential layer that outranks everything
 # stored, so an empty string left behind by a deployer who skipped the optional

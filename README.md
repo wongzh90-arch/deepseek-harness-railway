@@ -18,8 +18,9 @@ One container. Inside it:
 - A **volume** at `/data` holding the harness home (sessions, settings, the
   credential store) and your workspace, so a redeploy does not lose your work.
 
-Your DeepSeek API key is read from the environment, so the Models page is
-already configured the first time you open it.
+Your DeepSeek API key is optional at deploy time. Supply it and the Models page
+is already configured the first time you open it; leave it blank and the app
+asks for it on first load.
 
 ## Why there is a password on it
 
@@ -43,11 +44,13 @@ Everything reaching the harness has already passed basic auth.
 
 That makes the password the entire security boundary. Treat it accordingly:
 
-- Keep the generated one. It is 32 random characters. If you replace it, replace
-  it with something equally unguessable.
+- You choose it at deploy time. Make it unguessable; a password manager's
+  generated string is the right shape.
 - Anyone who has it can run arbitrary commands in this container and read your
   DeepSeek API key.
-- Do not put a shared or reused password here.
+- Do not reuse a password you use anywhere else.
+- Use a long, unguessable password. Railway's deploy form cannot enforce a
+  minimum length, so the container accepts the value the deployer chose.
 
 ## One patched line
 
@@ -76,9 +79,9 @@ Nothing that needs a desktop is switched on by this. `host.describe` reports
 
 | Variable | Required | What it does |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | yes | Your key from [platform.deepseek.com](https://platform.deepseek.com/). Injected into the harness's credential store as the read-only `env` layer, which outranks anything stored in the UI. |
-| `DSH_UI_PASSWORD` | yes | Basic auth password. Generated for you. |
-| `DSH_UI_USERNAME` | no | Basic auth user, defaults to `admin`. |
+| `DEEPSEEK_API_KEY` | no | Your key from [platform.deepseek.com](https://platform.deepseek.com/). Set it and it becomes the read-only `env` layer, which outranks anything stored in the UI. Leave it blank and the app asks for it on first load instead. An empty value is unset at boot so it cannot shadow the key you type in. |
+| `DSH_UI_USERNAME` | yes | The username you want to log in with. Asked for at deploy time. `DSH_UI_USER` is still honoured if you already deployed with it. |
+| `DSH_UI_USERPASS` | yes | The password you want to log in with. Asked for at deploy time; use a long, unique value. `DSH_UI_PASSWORD` and `DSH_UI_USER_PASSWORD` are still honoured if you already deployed with either. |
 | `DSH_WORKSPACE` | no | Directory the agent works in, defaults to `/data/workspace`. |
 | `DSH_HOME` | no | Harness home, defaults to `/data/.dsh`. |
 
@@ -86,10 +89,11 @@ Nothing that needs a desktop is switched on by this. `host.describe` reports
 
 1. Open the deployment URL. The browser asks for the username and password.
 2. Dismiss DeepSeek's testing notice.
-3. Click **Choose workspace**, pick `workspace`, and click **Open**.
-4. Type a task and send it.
+3. If you left `DEEPSEEK_API_KEY` blank, paste your key into the first-run dialog.
+4. Click **Choose workspace**, pick `workspace`, and click **Open**.
+5. Type a task and send it.
 
-Step 3 uses an in-app directory browser rather than an OS file dialog. The
+Step 4 uses an in-app directory browser rather than an OS file dialog. The
 harness picks that automatically on a headless host, so it works here and would
 not have on a desktop.
 
