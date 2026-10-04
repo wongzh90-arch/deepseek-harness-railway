@@ -25,24 +25,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl git ripgrep less procps tini python3 \
     && rm -rf /var/lib/apt/lists/*
 
+# pnpm is the package manager the official harness uses; the pinned CLIs
+# resolve correctly under its hoisted node-linker.
+RUN npm install -g pnpm@10
+
 ARG DSH_VERSION=0.1.0-rc.7
 
 # Pin the two Cordis plugins that broke fresh installs starting 2026-09-22.
 #
-# DSH declares cordis-plugin-loader and cordis-plugin-hmr with caret ranges,
-# so a fresh `npm install -g` always pulls the newest. As of those releases,
-# loader >= 1.0.4 stops the HMR service from ever registering (the exact
-# "user patch-layer watching requires the Cordis HMR service" crash), and
-# hmr >= 1.0.18 fails later against this CLI's dsh-app-boot. Pinning BOTH
-# is required - either alone still fails.
+# dsh declares cordis-plugin-loader and cordis-plugin-hmr with caret ranges,
+# so a fresh install always pulls the newest. As of those releases, loader
+# >= 1.0.4 stops the HMR service from ever registering (the exact "user
+# patch-layer watching requires the Cordis HMR service" crash), and hmr
+# >= 1.0.18 fails later against this CLI's dsh-app-boot. Pinning BOTH is
+# required - either alone still fails.
+#
+# `npm install -g` ignores npm `overrides` entirely (they only apply to the
+# root project), so the pins must be applied via a throwaway local project
+# whose package.json carries them as overrides. Its bin directory is then
+# appended to PATH so the `dsh` command resolves everywhere.
 #
 # Verified in dsh-market/dsh-market#690: loader 1.0.2 + hmr 1.0.16 with
 # everything else newest boots cleanly on the pinned CLI matrix.
-RUN npm install -g \
-      @deepseek-ai/cordis-plugin-loader@1.0.2 \
-      @deepseek-ai/cordis-plugin-hmr@1.0.16 \
-    && npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" \
-    && npm cache clean --force
+RUN mkdir -p /opt/dsh-host \
+    && cd /opt/dsh-host \
+    && echo '{"private":true,"dependencies":{"@deepseek-ai/dsh":"'$DSH_VERSION'"},"pnpm":{"overrides":{"@deepseek-ai/cordis-plugin-loader":"1.0.2","@deepseek-ai/cordis-plugin-hmr":"1.0.16"}}}' > package.json \
+    && echo "node-linker=hoisted" > .npmrc \
+    && pnpm install --no-frozen-lockfile \
+    && ln -sf /opt/dsh-host/node_modules/.bin/dsh /usr/local/bin/dsh \
+    && pnpm store prune
 
 # Re-enable the settings plane for a non-loopback browser.
 #
@@ -69,7 +80,7 @@ RUN npm install -g \
 #
 # Both greps are assertions. If a version bump reshapes this expression the
 # build fails here rather than shipping an image with a dead Settings page.
-RUN F=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-connection/lib/client.js \
+RUN F=/opt/dsh-host/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-connection/lib/client.js \
     && GATE='isLoopback: pageLocation === void 0 || isLoopbackHostname(pageLocation.hostname)' \
     && grep -qF "$GATE" "$F" \
     && python3 -c "import sys,pathlib; f=pathlib.Path(sys.argv[1]); t=f.read_text(); g=sys.argv[2]; assert t.count(g)==1, t.count(g); f.write_text(t.replace(g, 'isLoopback: true'))" "$F" "$GATE" \
