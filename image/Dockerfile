@@ -26,7 +26,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 ARG DSH_VERSION=0.1.0-rc.7
-RUN npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" && npm cache clean --force
+
+# Pin the two Cordis plugins that broke fresh installs starting 2026-09-22.
+#
+# DSH declares cordis-plugin-loader and cordis-plugin-hmr with caret ranges,
+# so a fresh `npm install -g` always pulls the newest. As of those releases,
+# loader >= 1.0.4 stops the HMR service from ever registering (the exact
+# "user patch-layer watching requires the Cordis HMR service" crash), and
+# hmr >= 1.0.18 fails later against this CLI's dsh-app-boot. Pinning BOTH
+# is required - either alone still fails.
+#
+# Verified in dsh-market/dsh-market#690: loader 1.0.2 + hmr 1.0.16 with
+# everything else newest boots cleanly on the pinned CLI matrix.
+RUN npm install -g \
+      @deepseek-ai/cordis-plugin-loader@1.0.2 \
+      @deepseek-ai/cordis-plugin-hmr@1.0.16 \
+    && npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" \
+    && npm cache clean --force
 
 # Re-enable the settings plane for a non-loopback browser.
 #
